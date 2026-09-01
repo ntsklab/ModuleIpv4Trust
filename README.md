@@ -37,6 +37,10 @@ The admin-cabinet web UI runs as the unprivileged `www` user, which cannot touch
 - `bin/check-address.php` (cron)
 - module REST callback `POST /pbxcore/api/modules/ModuleIpv4Trust/firewall-status` (used by the settings page to display the actual live rule state)
 
+## UI feedback
+
+The settings page **Status** table reflects the live firewall state (fetched via the REST callback, re-syncing the rules first). The **Re-check** button gives explicit feedback: it shows a loading spinner while the check runs, refreshes the global-address / fail2ban-trust / /32-rule rows, and shows a success ("Re-checked: <time>") or error message — so it is always clear whether a re-check actually happened.
+
 ## Installation
 
 1. Zip the module directory (`module.json` must be at the archive root).

@@ -26,7 +26,7 @@
                 </tr>
                 <tr>
                     <td>Fail2ban trust rule</td>
-                    <td>{{ trustRowExists ? 'Active' : 'Inactive' }}</td>
+                    <td id="live-trust">{{ trustRowExists ? 'Active' : 'Inactive' }}</td>
                 </tr>
                 <tr>
                     <td>IPv4 firewall: own /32 ACCEPT</td>
@@ -37,6 +37,7 @@
         <button type="button" class="ui basic blue button" id="ipv4-trust-recheck">
             <i class="sync icon"></i> Re-check
         </button>
+        <div class="ui message hidden" id="ipv4-trust-recheck-feedback" style="margin-top: 0.5em;"></div>
     </div>
 
     {{ partial("partials/submitbutton",['indexurl':'pbx-extension-modules/index/']) }}
