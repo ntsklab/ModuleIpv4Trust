@@ -71,6 +71,9 @@ class Ipv4TrustRules
 
     /**
      * Returns the actual live state of the module rule in the IPv4 firewall.
+     * Only rules matching a module-managed address are reported — the core
+     * firewall itself contains e.g. "127.0.0.1/32" ACCEPT rules that must
+     * not be mistaken for the module rule.
      *
      * @return array<string, mixed> ownAddressRule (e.g. "1.2.3.4/32") or empty string
      */
@@ -81,17 +84,30 @@ class Ipv4TrustRules
             return ['ownAddressRule' => ''];
         }
 
-        $ownAddressRule = '';
+        $candidates = [];
+        $currentAddress = Ipv4TrustHelper::getGlobalIpv4Address();
+        if ($currentAddress !== '') {
+            $candidates[] = "{$currentAddress}/32";
+        }
+        $trustRow = NetworkFilters::findFirstByDescription(AddressSyncer::FILTER_MARKER);
+        if ($trustRow !== null && !empty($trustRow->permit)) {
+            $candidates[] = (string)$trustRow->permit;
+        }
+        if (empty($candidates)) {
+            return ['ownAddressRule' => ''];
+        }
 
         $out = [];
         Processes::mwExec("{$iptables} -S INPUT", $out);
         foreach ($out as $line) {
-            if (preg_match('/-s\s+(\S+\/32)\s+-j\s+ACCEPT/', $line, $m) === 1) {
-                $ownAddressRule = $m[1];
-                break;
+            if (preg_match('/-s\s+(\S+)\s+-j\s+ACCEPT/', $line, $m) !== 1) {
+                continue;
+            }
+            if (in_array($m[1], $candidates, true)) {
+                return ['ownAddressRule' => $m[1]];
             }
         }
 
-        return ['ownAddressRule' => $ownAddressRule];
+        return ['ownAddressRule' => ''];
     }
 }
