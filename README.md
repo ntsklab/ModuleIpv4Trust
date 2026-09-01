@@ -29,6 +29,8 @@ The global IPv4 address can change (ISP re-assignment, NAT restart). The module 
 - **Dynamic**: the rule is added/removed live (via `iptables`) immediately when the settings change — no reboot required.
 - **Hook**: the rule is re-injected on every firewall rebuild (boot / config reload) via `onAfterIptablesReload`.
 
+Both paths share a single rule-builder (`Ipv4TrustRules::syncDynamic()`). The /32 ACCEPT is always inserted **before** the core firewall's terminal `-A INPUT -j DROP`. Because the dynamic path runs *after* a reload (DROP already present), a plain `-A` append would land after the DROP and be ineffective (dropping hairpin NAPT traffic). `syncDynamic()` therefore deletes any existing copy and re-inserts the rule before the DROP.
+
 ## Architecture note
 
 The admin-cabinet web UI runs as the unprivileged `www` user, which cannot touch `iptables` (`/var/run/xtables.lock` is root-only). All live firewall operations therefore go through root-rights paths:

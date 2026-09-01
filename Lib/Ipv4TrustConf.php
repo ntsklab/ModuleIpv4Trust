@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Modules\ModuleIpv4Trust\Lib;
 
 use MikoPBX\Common\Models\NetworkFilters;
-use MikoPBX\Core\System\Processes;
 use MikoPBX\Core\System\Util;
 use MikoPBX\Modules\Config\ConfigClass;
 use MikoPBX\Modules\PbxExtensionUtils;
@@ -17,31 +16,19 @@ class Ipv4TrustConf extends ConfigClass
     private const MODULE_UNIQUE_ID = 'ModuleIpv4Trust';
 
     /**
-     * Adds the own global IPv4 /32 ACCEPT rule before the core firewall final DROP.
-     * The rule is rebuilt from the current address on every firewall reload.
+     * Injects the own /32 ACCEPT rule on every firewall reload.
+     *
+     * Delegates to Ipv4TrustRules::syncDynamic() so the reload path and the
+     * dynamic path produce the identical rule set. During a reload the core has
+     * not yet appended its terminal DROP, so syncDynamic() falls back to
+     * appending (which lands before the DROP that the core adds afterwards).
      */
     public function onAfterIptablesReload(): void
     {
         if (!PbxExtensionUtils::isEnabled(self::MODULE_UNIQUE_ID)) {
             return;
         }
-
-        $settings = ModuleIpv4TrustSettings::findFirst();
-        if ($settings === null || $settings->allowOwnAddress !== '1') {
-            return;
-        }
-
-        $iptables = Ipv4TrustHelper::whichIptables();
-        if (empty($iptables)) {
-            return;
-        }
-
-        $address = Ipv4TrustHelper::getGlobalIpv4Address();
-        if ($address === '' || !Ipv4TrustHelper::isUsableAddress($address)) {
-            return;
-        }
-
-        Processes::mwExec("{$iptables} -A INPUT -s {$address}/32 -j ACCEPT");
+        Ipv4TrustRules::syncDynamic();
     }
 
     public function createCronTasks(array &$tasks): void

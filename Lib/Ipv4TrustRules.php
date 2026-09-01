@@ -19,8 +19,15 @@ use Modules\ModuleIpv4Trust\Models\ModuleIpv4TrustSettings;
 class Ipv4TrustRules
 {
     /**
-     * Aligns the live INPUT chain with the current settings:
-     * adds the missing /32 ACCEPT rule, removes a stale one.
+     * Aligns the live INPUT chain with the current settings.
+     *
+     * The core firewall appends its terminal catch-all `-A INPUT -j DROP` as
+     * the last rule. The own /32 ACCEPT must sit *before* that DROP to allow
+     * hairpin NAPT traffic. Because `syncDynamic()` runs after a reload (DROP
+     * already present), a plain `-A` append would land after the DROP and do
+     * nothing. We delete any existing copy of the rule (healing previously
+     * misplaced ones) and re-insert it before the terminal DROP; when no DROP
+     * exists yet we fall back to appending.
      */
     public static function syncDynamic(): void
     {
@@ -42,30 +49,50 @@ class Ipv4TrustRules
         }
 
         $moduleCidrs = array_unique(array_filter([$desiredCidr, $oldCidr]));
-        if (empty($moduleCidrs)) {
-            return;
+
+        $dropPos = self::getDropPosition($iptables);
+
+        foreach ($moduleCidrs as $cidr) {
+            self::setRule($iptables, $dropPos, "-s {$cidr} -j ACCEPT", $cidr === $desiredCidr);
         }
+    }
 
-        $presentCidrs = [];
-
+    /**
+     * Returns the 1-based iptables RULE position of the terminal catch-all
+     * DROP in the INPUT chain, or 0 if there is no such rule. `-S INPUT` prints
+     * the policy line (`-P INPUT …`) first, so only `-A INPUT` lines count.
+     */
+    private static function getDropPosition(string $iptables): int
+    {
         $out = [];
         Processes::mwExec("{$iptables} -S INPUT", $out);
+        $rulePos = 0;
         foreach ($out as $line) {
-            if (preg_match('/-s\s+(\S+)\s+-j\s+ACCEPT/', $line, $m) !== 1) {
+            $line = trim($line);
+            if (!str_starts_with($line, '-A INPUT')) {
                 continue;
             }
-            if (in_array($m[1], $moduleCidrs, true)) {
-                $presentCidrs[$m[1]] = true;
+            $rulePos++;
+            if ($line === '-A INPUT -j DROP') {
+                return $rulePos;
             }
         }
+        return 0;
+    }
 
-        foreach ($presentCidrs as $present => $_) {
-            if ($present !== $desiredCidr) {
-                Processes::mwExec("{$iptables} -D INPUT -s {$present} -j ACCEPT");
-            }
+    /**
+     * Makes a module rule active or inactive, placed before the terminal DROP.
+     */
+    private static function setRule(string $iptables, int $dropPos, string $rule, bool $active): void
+    {
+        Processes::mwExec("while {$iptables} -D INPUT {$rule} 2>/dev/null; do :; done");
+        if (!$active) {
+            return;
         }
-        if ($desiredCidr !== '' && !isset($presentCidrs[$desiredCidr])) {
-            Processes::mwExec("{$iptables} -A INPUT -s {$desiredCidr} -j ACCEPT");
+        if ($dropPos > 0) {
+            Processes::mwExec("{$iptables} -I INPUT {$dropPos} {$rule}");
+        } else {
+            Processes::mwExec("{$iptables} -A INPUT {$rule}");
         }
     }
 
