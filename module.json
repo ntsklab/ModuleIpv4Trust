@@ -1,0 +1,8 @@
+{
+  "developer": "private",
+  "moduleUniqueID": "ModuleIpv4Trust",
+  "support_email": "ntek@in-deep.blue",
+  "version": "1.0",
+  "min_pbx_version": "2026.1.223",
+  "module_type": "security"
+}
