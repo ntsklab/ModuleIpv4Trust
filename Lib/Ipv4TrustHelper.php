@@ -44,7 +44,7 @@ class Ipv4TrustHelper
     public static function isUsableAddress(string $address): bool
     {
         return filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false
-            && !filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+            && filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
     }
 
     public static function whichIptables(): string
